@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: leadops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: leadops
+    ports:
+      - "5432:5432"
+    volumes:
+      - leadops_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  leadops_postgres_data:
