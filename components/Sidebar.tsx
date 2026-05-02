@@ -30,11 +30,6 @@ const navItems = [
     icon: KanbanSquare,
   },
   {
-    label: "Analytics",
-    href: "/analytics",
-    icon: BarChart3,
-  },
-  {
     label: "Settings",
     href: "/settings",
     icon: Settings,
