@@ -8,10 +8,15 @@ import {
   Target,
   TrendingUp,
   Users,
+  Trophy,
+  XCircle,
+  CalendarPlus,
+  CircleDollarSign,
 } from "lucide-react";
 import { Stage, PrismaClient } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
+import { DashboardCharts } from "./DashboardCharts";
 
 const prisma = new PrismaClient();
 
@@ -71,12 +76,28 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(date);
+}
+
+function getStartOfWeek() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  return startOfWeek;
 }
 
 type DashboardPageProps = {
@@ -103,21 +124,35 @@ export default async function DashboardPage({
       : "estimatedValue-desc";
 
   const userId = session.user.id;
+  const startOfWeek = getStartOfWeek();
 
   const [
     totalLeads,
+    newLeadsThisWeek,
     pipelineValueResult,
+    totalDealValueResult,
+    averageDealValueResult,
     wonValueResult,
     hotLeads,
     wonLeads,
     lostLeads,
     leadsByStage,
+    leadsBySource,
     recentActivities,
     topOpportunities,
   ] = await Promise.all([
     prisma.lead.count({
       where: {
         userId,
+      },
+    }),
+
+    prisma.lead.count({
+      where: {
+        userId,
+        createdAt: {
+          gte: startOfWeek,
+        },
       },
     }),
 
@@ -129,6 +164,24 @@ export default async function DashboardPage({
         },
       },
       _sum: {
+        estimatedValue: true,
+      },
+    }),
+
+    prisma.lead.aggregate({
+      where: {
+        userId,
+      },
+      _sum: {
+        estimatedValue: true,
+      },
+    }),
+
+    prisma.lead.aggregate({
+      where: {
+        userId,
+      },
+      _avg: {
         estimatedValue: true,
       },
     }),
@@ -181,6 +234,19 @@ export default async function DashboardPage({
       },
     }),
 
+    prisma.lead.groupBy({
+      by: ["source"],
+      where: {
+        userId,
+      },
+      _count: {
+        source: true,
+      },
+      _sum: {
+        estimatedValue: true,
+      },
+    }),
+
     prisma.leadActivity.findMany({
       where: {
         lead: {
@@ -223,11 +289,13 @@ export default async function DashboardPage({
   ]);
 
   const pipelineValue = pipelineValueResult._sum.estimatedValue ?? 0;
+  const totalDealValue = totalDealValueResult._sum.estimatedValue ?? 0;
+  const averageDealValue = averageDealValueResult._avg.estimatedValue ?? 0;
   const wonValue = wonValueResult._sum.estimatedValue ?? 0;
 
   const closedLeads = wonLeads + lostLeads;
   const conversionRate =
-    closedLeads > 0 ? Math.round((wonLeads / closedLeads) * 100) : 0;
+    closedLeads > 0 ? Number(((wonLeads / closedLeads) * 100).toFixed(1)) : 0;
 
   const stageMap = new Map(
     leadsByStage.map((item) => [
@@ -239,6 +307,22 @@ export default async function DashboardPage({
     ]),
   );
 
+  const stageAnalyticsData = stages.map((stage) => {
+    const stageData = stageMap.get(stage);
+
+    return {
+      stage: stageLabels[stage],
+      count: stageData?.count ?? 0,
+      value: stageData?.value ?? 0,
+    };
+  });
+
+  const sourceAnalyticsData = leadsBySource.map((item) => ({
+    source: item.source,
+    count: item._count.source,
+    value: item._sum.estimatedValue ?? 0,
+  }));
+
   const maxStageCount = Math.max(
     ...stages.map((stage) => stageMap.get(stage)?.count ?? 0),
     1,
@@ -248,22 +332,22 @@ export default async function DashboardPage({
     <div className="space-y-8">
       <section className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="text-sm font-medium text-slate-500">CRM Overview</p>
+          <p className="text-sm font-medium text-slate-500">CRM Analytics</p>
 
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
             Dashboard
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            Welcome back, {session.user.name}. Here is your sales pipeline
-            overview.
+            Welcome back, {session.user.name}. Track your leads, pipeline value,
+            conversion rate, and sales performance.
           </p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          Total pipeline value:{" "}
+          Total deal value:{" "}
           <span className="font-semibold text-slate-900">
-            {formatCurrency(pipelineValue)}
+            {formatCurrency(totalDealValue)}
           </span>
         </div>
       </section>
@@ -277,6 +361,13 @@ export default async function DashboardPage({
         />
 
         <MetricCard
+          title="New This Week"
+          value={newLeadsThisWeek.toString()}
+          description="Leads created since Monday"
+          icon={CalendarPlus}
+        />
+
+        <MetricCard
           title="Pipeline Value"
           value={formatCurrency(pipelineValue)}
           description="Open opportunities"
@@ -284,10 +375,31 @@ export default async function DashboardPage({
         />
 
         <MetricCard
-          title="Won Revenue"
-          value={formatCurrency(wonValue)}
-          description="Closed won value"
-          icon={TrendingUp}
+          title="Conversion Rate"
+          value={formatPercent(conversionRate)}
+          description="Won deals out of closed deals"
+          icon={Target}
+        />
+
+        <MetricCard
+          title="Won Deals"
+          value={wonLeads.toString()}
+          description={`${formatCurrency(wonValue)} closed won`}
+          icon={Trophy}
+        />
+
+        <MetricCard
+          title="Lost Deals"
+          value={lostLeads.toString()}
+          description="Closed lost opportunities"
+          icon={XCircle}
+        />
+
+        <MetricCard
+          title="Average Deal Value"
+          value={formatCurrency(averageDealValue)}
+          description="Average estimated lead value"
+          icon={CircleDollarSign}
         />
 
         <MetricCard
@@ -298,12 +410,17 @@ export default async function DashboardPage({
         />
       </section>
 
+      <DashboardCharts
+        stageData={stageAnalyticsData}
+        sourceData={sourceAnalyticsData}
+      />
+
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">
-                Pipeline by Stage
+                Leads by Stage
               </h2>
               <p className="mt-1 text-sm text-slate-500">
                 Lead count and estimated value by sales stage.
@@ -363,7 +480,7 @@ export default async function DashboardPage({
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="flex h-32 w-32 items-center justify-center rounded-full border-8 border-slate-900 bg-slate-50">
               <span className="text-3xl font-bold text-slate-900">
-                {conversionRate}%
+                {formatPercent(conversionRate)}
               </span>
             </div>
 
