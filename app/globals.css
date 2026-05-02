@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(203 213 225);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.input::placeholder {
+  color: rgb(148 163 184);
+}
+
+.input:focus {
+  border-color: rgb(15 23 42);
+  box-shadow: 0 0 0 2px rgb(15 23 42 / 0.1);
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -22,21 +22,29 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
       });
 
-      if (result?.error) {
-        const message = "Invalid email or password.";
+      const data = await response.json();
+
+      if (!response.ok) {
+        const message = data.message || "Unable to create account.";
         setError(message);
         toast.error(message);
         return;
       }
 
-      toast.success("Login successful.");
-      router.replace("/dashboard");
+      toast.success("Account created successfully.");
+      router.replace("/login");
       router.refresh();
     } catch (error) {
       const errorMessage =
@@ -59,11 +67,11 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              Welcome back
+              Create your account
             </h1>
 
             <p className="mt-2 text-sm text-slate-600">
-              Log in to manage your leads, pipeline, and CRM analytics.
+              Start managing your leads, pipeline, and CRM analytics.
             </p>
           </div>
 
@@ -74,6 +82,26 @@ export default function LoginPage() {
                   {error}
                 </div>
               )}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="name"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Full name
+                </label>
+
+                <input
+                  id="name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                />
+              </div>
 
               <div className="space-y-2">
                 <label
@@ -106,13 +134,18 @@ export default function LoginPage() {
                 <input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder="Create a secure password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
+                  minLength={8}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
                 />
+
+                <p className="text-xs text-slate-500">
+                  Use at least 8 characters.
+                </p>
               </div>
 
               <button
@@ -120,17 +153,17 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLoading ? "Signing in..." : "Sign in"}
+                {isLoading ? "Creating account..." : "Create account"}
               </button>
             </form>
 
             <div className="mt-6 text-center text-sm text-slate-600">
-              Don&apos;t have an account?{" "}
+              Already have an account?{" "}
               <Link
-                href="/register"
+                href="/login"
                 className="font-medium text-slate-900 underline-offset-4 hover:underline"
               >
-                Create account
+                Sign in
               </Link>
             </div>
           </div>
