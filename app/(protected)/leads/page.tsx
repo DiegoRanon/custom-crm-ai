@@ -42,6 +42,34 @@ const scoreStyles: Record<LeadScoreLabel, string> = {
   Cold: "bg-slate-100 text-slate-600",
 };
 
+type LeadSort = "createdAt-desc" | "createdAt-asc" | "stage-desc";
+
+const sortLabels: Record<LeadSort, string> = {
+  "createdAt-desc": "Creation date: newest first",
+  "createdAt-asc": "Creation date: oldest first",
+  "stage-desc": "Stage: descending",
+};
+
+function getLeadsOrderBy(sort: LeadSort) {
+  switch (sort) {
+    case "createdAt-asc":
+      return {
+        createdAt: "asc" as const,
+      };
+
+    case "stage-desc":
+      return {
+        stage: "desc" as const,
+      };
+
+    case "createdAt-desc":
+    default:
+      return {
+        createdAt: "desc" as const,
+      };
+  }
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
@@ -58,12 +86,26 @@ function formatDate(date: Date) {
   }).format(date);
 }
 
-export default async function LeadsPage() {
+type LeadsPageProps = {
+  searchParams?: Promise<{
+    sort?: string;
+  }>;
+};
+
+export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = await searchParams;
+  const sortParam = resolvedSearchParams?.sort;
+
+  const selectedSort: LeadSort =
+    sortParam === "createdAt-asc" || sortParam === "stage-desc"
+      ? sortParam
+      : "createdAt-desc";
 
   const userId = session.user.id;
 
@@ -85,9 +127,7 @@ export default async function LeadsPage() {
         take: 1,
       },
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: getLeadsOrderBy(selectedSort),
   });
 
   const totalPipelineValue = leads.reduce(
@@ -147,24 +187,50 @@ export default async function LeadsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col justify-between gap-4 border-b border-slate-200 p-6 md:flex-row md:items-center">
+        <div className="flex flex-col justify-between gap-4 border-b border-slate-200 p-6 xl:flex-row xl:items-center">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
               Lead Directory
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Review lead details, stage, score, and latest activity.
+              Review lead details, stage, score, and latest activity. Sorted by{" "}
+              {sortLabels[selectedSort].toLowerCase()}.
             </p>
           </div>
 
-          <div className="relative w-full md:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex flex-wrap gap-2">
+              <SortLink
+                href="/leads?sort=createdAt-desc"
+                active={selectedSort === "createdAt-desc"}
+              >
+                Newest
+              </SortLink>
 
-            <input
-              type="text"
-              placeholder="Search leads..."
-              className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
+              <SortLink
+                href="/leads?sort=createdAt-asc"
+                active={selectedSort === "createdAt-asc"}
+              >
+                Created ↑
+              </SortLink>
+
+              <SortLink
+                href="/leads?sort=stage-desc"
+                active={selectedSort === "stage-desc"}
+              >
+                Stage ↓
+              </SortLink>
+            </div>
+
+            <div className="relative w-full md:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+              <input
+                type="text"
+                placeholder="Search leads..."
+                className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              />
+            </div>
           </div>
         </div>
 
@@ -288,6 +354,29 @@ function SummaryCard({
 
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </div>
+  );
+}
+
+function SortLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+        active
+          ? "bg-slate-900 text-white"
+          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }
 

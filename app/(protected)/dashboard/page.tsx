@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import {
@@ -9,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { Stage, PrismaClient } from "@prisma/client";
+
 import { authOptions } from "@/lib/auth";
 
 const prisma = new PrismaClient();
@@ -33,6 +35,34 @@ const stageLabels: Record<Stage, string> = {
   Lost: "Lost",
 };
 
+type DashboardSort = "estimatedValue-desc" | "createdAt-asc" | "stage-desc";
+
+const sortLabels: Record<DashboardSort, string> = {
+  "estimatedValue-desc": "Value: high to low",
+  "createdAt-asc": "Creation date: oldest first",
+  "stage-desc": "Stage: descending",
+};
+
+function getTopOpportunitiesOrderBy(sort: DashboardSort) {
+  switch (sort) {
+    case "createdAt-asc":
+      return {
+        createdAt: "asc" as const,
+      };
+
+    case "stage-desc":
+      return {
+        stage: "desc" as const,
+      };
+
+    case "estimatedValue-desc":
+    default:
+      return {
+        estimatedValue: "desc" as const,
+      };
+  }
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
@@ -49,12 +79,28 @@ function formatDate(date: Date) {
   }).format(date);
 }
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: Promise<{
+    sort?: string;
+  }>;
+};
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = await searchParams;
+  const sortParam = resolvedSearchParams?.sort;
+
+  const selectedSort: DashboardSort =
+    sortParam === "createdAt-asc" || sortParam === "stage-desc"
+      ? sortParam
+      : "estimatedValue-desc";
 
   const userId = session.user.id;
 
@@ -171,9 +217,7 @@ export default async function DashboardPage() {
           take: 1,
         },
       },
-      orderBy: {
-        estimatedValue: "desc",
-      },
+      orderBy: getTopOpportunitiesOrderBy(selectedSort),
       take: 5,
     }),
   ]);
@@ -336,13 +380,39 @@ export default async function DashboardPage() {
 
       <section className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Top Opportunities
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Highest value open leads.
-            </p>
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Top Opportunities
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Open leads sorted by {sortLabels[selectedSort].toLowerCase()}.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <SortLink
+                href="/dashboard?sort=estimatedValue-desc"
+                active={selectedSort === "estimatedValue-desc"}
+              >
+                Value
+              </SortLink>
+
+              <SortLink
+                href="/dashboard?sort=createdAt-asc"
+                active={selectedSort === "createdAt-asc"}
+              >
+                Created ↑
+              </SortLink>
+
+              <SortLink
+                href="/dashboard?sort=stage-desc"
+                active={selectedSort === "stage-desc"}
+              >
+                Stage ↓
+              </SortLink>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -459,6 +529,29 @@ function MetricCard({
         <p className="mt-1 text-sm text-slate-500">{description}</p>
       </div>
     </div>
+  );
+}
+
+function SortLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+        active
+          ? "bg-slate-900 text-white"
+          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }
 
