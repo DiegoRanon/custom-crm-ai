@@ -48,7 +48,7 @@ type KanbanLead = {
 
 type KanbanBoardProps = {
   initialLeads: KanbanLead[];
-  stages: Stage[];
+  stages: readonly Stage[];
 };
 
 const stageLabels: Record<Stage, string> = {
