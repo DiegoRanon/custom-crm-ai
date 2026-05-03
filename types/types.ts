@@ -22,7 +22,6 @@ export type LeadActivityType =
 
 export type LeadScoreLabel = "Hot" | "Warm" | "Cold";
 
-// Database schema
 export interface User {
   id: string;
   name: string;
